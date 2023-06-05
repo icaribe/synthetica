@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Chatbot</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+        }
+        .title {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        .question-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            background-color: transparent;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .output {
+            width: 100%;
+            padding: 10px;
+            background-color: rgba(0, 255, 0, 0.1);
+            border-radius: 4px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            max-height: 200px;
+            margin-bottom: 10px;
+        }
+        .button-container {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .button {
+            margin: 5px;
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .dark-mode {
+            background-color: #00ff00;
+            color: #0a0a0a;
+        }
+        .dark-mode:hover {
+            background-color: #00e600;
+        }
+        .microphone-icon, .speaker-icon {
+            margin-left: 5px;
+            font-size: 20px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <h1 class="title">Chatbot</h1>
+        <div>
+            <label for="question-input">Pergunta:</label>
+            <input type="text" id="question-input" v-model="question" class="question-input" @keyup.enter="sendQuestion">
+        </div>
+        <div class="button-container">
+            <button @click="toggleListening" class="button">{{ listening ? 'Parar' : 'Ouvir' }}<span class="microphone-icon">&#128265;</span></button>
+            <button @click="sendQuestion" class="button">Enviar</button>
+            <button @click="clearOutput" class="button">Limpar</button>
+            <button @click="toggleDarkMode" class="button dark-mode">{{ darkMode ? 'Modo Claro' : 'Modo Escuro' }}</button>
+            <button @click="exit" class="button">Sair</button>
+        </div>
+        <div>
+            <p>Resposta:</p>
+            <pre class="output">{{ output }}</pre>
+        </div>
+    </div>
+
+    <script>
+        const app = new Vue({
+            el: '#app',
+            data: {
+                question: '',
+                output: '',
+                recognition: null,
+                listening: false,
+                darkMode: false
+            },
+            methods: {
+                initializeRecognition() {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    this.recognition.lang = 'pt-BR';
+                    this.recognition.continuous = true;
+                    this.recognition.interimResults = false;
+
+                    this.recognition.onstart = () => {
+                        this.listening = true;
+                    };
+
+                    this.recognition.onend = () => {
+                        this.listening = false;
+                    };
+
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[event.results.length - 1][0].transcript;
+                        if (transcript.toLowerCase().includes('sintética')) {
+                            this.question = transcript.replace(/sintética/i, '');
+                            this.sendQuestion();
+                        }
+                    };
+
+                    this.recognition.start();
+                },
+                toggleListening() {
+                    if (this.listening) {
+                        this.recognition.stop();
+                    } else {
+                        this.recognition.start();
+                    }
+                },
+                sendQuestion() {
+                    if (this.question.trim() !== '') {
+                        this.output += `Você perguntou: ${this.question}\n`;
+
+                        const API_KEY = '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';
+                        const requestOptions = {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${API_KEY}`
+                            },
+                            body: JSON.stringify({
+                                prompt: `Question: ${this.question}\nAnswer:`,
+                                max_tokens: 1024,
+                                temperature: 0.2,
+                                top_p: 1,
+                                frequency_penalty: 0,
+                                presence_penalty: 0
+                            })
+                        };
+
+                        fetch('https://api.openai.com/v1/engines/text-davinci-002/completions', requestOptions)
+                            .then(response => response.json())
+                            .then(data => {
+                                const answer = data.choices[0].text.trim();
+                                this.output += `Synthética: ${answer}\n`;
+                                this.speak(answer);
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                this.output += 'Ocorreu um erro ao obter a resposta. Por favor, tente novamente.\n';
+                            });
+
+                        this.question = '';
+                    }
+                },
+                speak(text) {
+                    const synthesis = window.speechSynthesis;
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'pt-BR';
+                    synthesis.speak(utterance);
+                },
+                clearOutput() {
+                    this.output = '';
+                },
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                },
+                exit() {
+                    this.recognition.stop();
+                    window.close();
+                }
+            },
+            mounted() {
+                this.initializeRecognition();
+            }
+        });
+    </script>
+</body>
+</html>
